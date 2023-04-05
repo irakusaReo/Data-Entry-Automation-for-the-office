@@ -5,13 +5,13 @@ import openai
 import time
 
 # Set up Airtable API client
-AIRTABLE_API_KEY = "keyeDQ87k9Looanna"
-AIRTABLE_BASE_KEY = "appOo3NIs0nT86pYB"
-AIRTABLE_TABLE_NAME = "Formulas Test"
+AIRTABLE_API_KEY = "private"
+AIRTABLE_BASE_KEY = "and"
+AIRTABLE_TABLE_NAME = "confidential"
 airtable_client = airtable.Airtable(AIRTABLE_BASE_KEY, AIRTABLE_TABLE_NAME, AIRTABLE_API_KEY)
 
 # Set up OpenAI API client
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = "also_private"
 openai.api_key = OPENAI_API_KEY
 
 # Define function to generate a description using OpenAI API
