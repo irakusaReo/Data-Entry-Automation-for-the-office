@@ -3,15 +3,16 @@ import re
 import airtable
 import openai
 import time
+import shutil
 
 # Set up Airtable API client
 AIRTABLE_API_KEY = "keyeDQ87k9Looanna"
 AIRTABLE_BASE_KEY = "appOo3NIs0nT86pYB"
-AIRTABLE_TABLE_NAME = "Formulas Test"
+AIRTABLE_TABLE_NAME = "Imported table"
 airtable_client = airtable.Airtable(AIRTABLE_BASE_KEY, AIRTABLE_TABLE_NAME, AIRTABLE_API_KEY)
 
 # Set up OpenAI API client
-OPENAI_API_KEY = "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"
+OPENAI_API_KEY = "****"
 openai.api_key = OPENAI_API_KEY
 
 # Define function to generate a description using OpenAI API
@@ -35,7 +36,7 @@ def generate_description(item_name):
 
 # Define function to generate bullet points using OpenAI API
 def generate_bullet_points(description):
-    prompt = f"Generate short points for:\n{description}. Using at least 5 bullets. Each bullet should have a maximum of 10 words. Use this bullet:'•'. Do not mention the name of the item. Include dimensions if they're mentioned in the description or item name:{item_name}"
+    prompt = f"Generate short points for:\n{description}. Using at least 5 bullets. Each bullet should have a maximum of 10 words. Use this bullet:'•'. Do not mention the name of the item. Include dimensions if they're mentioned in the description or item name:{item_name}. Don't put a full stop at the end of the bullet"
     completions = openai.Completion.create(
         engine="text-davinci-002",
         prompt=prompt,
@@ -55,8 +56,11 @@ def generate_bullet_points(description):
         print("Error: could not generate bullet points")
         return None
 
-# Define folder path
-FOLDER_PATH = r"C:\Users\Andreo\Desktop\AutomationTestData\Batch 120"
+# Define folder paths
+NEW_SHIPMENT_SOURCE_FOLDER_PATH = r"C:\Users\Andreo\Desktop\idkWhatToNameYouMan\New_Shipment"
+CURRENT_BATCH_DESTINATION_FOLDER_PATH = r"C:\Users\Andreo\Desktop\idkWhatToNameYouMan\Sorted\Current_Batch"
+TO_IMAGEBANK_DESTINATION_FOLDER_PATH = r"C:\Users\Andreo\Desktop\idkWhatToNameYouMan\Sorted\To_Imagebank"
+NOT_ON_AIRTABLE_DESTINATION_FOLDER_PATH = r"C:\Users\Andreo\Desktop\idkWhatToNameYouMan\Sorted\Not_On_Airtable"
 
 # Define time variables for rate limiting
 start_time = time.time()
@@ -72,7 +76,7 @@ request_count = 0
 token_count = 0
 
 # Loop over files in folder
-for filename in os.listdir(FOLDER_PATH):
+for filename in os.listdir(NEW_SHIPMENT_SOURCE_FOLDER_PATH):
     # Rate limit to 20 requests and 40000 tokens per minute
     if request_count >= MAX_REQUESTS_PER_MINUTE or token_count >= MAX_TOKENS_PER_MINUTE:
         elapsed_time = time.time() - start_time
@@ -99,27 +103,44 @@ for filename in os.listdir(FOLDER_PATH):
         else:
             print(f"Error: invalid image number {image_number} for file {filename}")
             continue
-        # Search for item in Airtable using item number
+       # Search for item in Airtable using item number
         records = airtable_client.search("ItemNo+Col", item_number)
-        # If item is found, update TACC Web Status and generate description and bullet points
+
+        # If item is found
         if records:
             record = records[0]
-            airtable_client.update(record["id"], {"TACC Web Status": "120"})
-            item_name = record["fields"].get("B2C Product Title") or record["fields"].get("Product name")
-            if item_name:
-                description = record["fields"].get("B2C Long Description")
-                bullet_points = record["fields"].get("B2C Short Description")
-                if not description or not bullet_points:
-                    description = generate_description(item_name)
-                    bullet_points = generate_bullet_points(description)
-                    if description and bullet_points:
-                        airtable_client.update(record["id"], {"B2C Long Description": description, "B2C Short Description": bullet_points, airtable_field:filename})
-                        print(f"Generated description and bullet points for item number {item_number}")
-                else:
-                    print(f"B2C Long Description and B2C Short Description fields are not empty for item number {item_number}")
+            airtable_client.update(record["id"], {airtable_field:filename})
+            tacc_web_status = record["fields"].get("TACC Web Status")
+
+            # Check TACC web status
+            if tacc_web_status is None or not tacc_web_status.isdigit() and image_number == 1:
+                destination_folder = CURRENT_BATCH_DESTINATION_FOLDER_PATH
+                airtable_client.update(record["id"], {"TACC Web Status": "129"})
+                source_path = os.path.join(NEW_SHIPMENT_SOURCE_FOLDER_PATH, filename)
+                destination_path = os.path.join(destination_folder, filename)
+                shutil.move(source_path, destination_path)
+                print(f"{item_number} is Offline. Moving {filename} to 'current batch' folder. Updated {item_number}'s batch no. to 129")
+            elif tacc_web_status is not None and tacc_web_status.isdigit() and image_number != 1:
+                destination_folder = CURRENT_BATCH_DESTINATION_FOLDER_PATH
+                source_path = os.path.join(NEW_SHIPMENT_SOURCE_FOLDER_PATH, filename)
+                destination_path = os.path.join(destination_folder, filename)
+                shutil.move(source_path, destination_path)
+                print(f"{item_number} is Offline. Moving {filename} to 'current batch' folder. Updated {item_number}'s batch no. to 129")
             else:
-                print(f"No B2C Product Title or Product Name found for item number {item_number}")
+                destination_folder = TO_IMAGEBANK_DESTINATION_FOLDER_PATH
+                source_path = os.path.join(NEW_SHIPMENT_SOURCE_FOLDER_PATH, filename)
+                destination_path = os.path.join(destination_folder, filename)
+                shutil.move(source_path, destination_path)
+                print(f"{item_number} is Online. Batch {tacc_web_status}. Moving {filename} to 'To Image Bank' folder")
+
+            # Generate description and bullet points
+            
+
         else:
-            print(f"No record found for item number {item_number}")
+            destination_folder = NOT_ON_AIRTABLE_DESTINATION_FOLDER_PATH
+            source_path = os.path.join(NEW_SHIPMENT_SOURCE_FOLDER_PATH, filename)
+            destination_path = os.path.join(destination_folder, filename)
+            shutil.move(source_path, destination_path)
+            print(f"No record found for item number {item_number}. Moving {filename} to 'Not on Airtable' folder")
 
             
